@@ -1,0 +1,217 @@
+﻿<script>
+  import { onMount } from 'svelte';
+  import { user } from '$lib/firebase';
+  import { goto } from '$app/navigation';
+  import { 
+    userProfile, 
+    loadUserProfile, 
+    updateUserProfile, 
+    changeNickname, 
+    generateRandomNickname,
+    generateUniqueRandomNickname
+  } from '$lib/profile';
+  
+  let currentUser = null;
+  let profile = null;
+  let isLoading = true;
+  let isSaving = false;
+  let errorMessage = null;
+  let successMessage = null;
+  
+  // ?몄쭛 媛?ν븳 ?꾨줈???뺣낫
+  let editableNickname = '';
+  let editableBio = '';
+  
+  // 濡쒓렇???곹깭 ?뺤씤
+  onMount(async () => {
+    const unsubscribe = user.subscribe(async (value) => {
+      currentUser = value;
+      
+      // 濡쒓렇?명븯吏 ?딆? 寃쎌슦 濡쒓렇???섏씠吏濡?由щ떎?대젆??
+      if (!value) {
+        goto('/login');
+        return;
+      }
+      
+      // ?꾨줈???뺣낫 遺덈윭?ㅺ린
+      isLoading = true;
+      errorMessage = null;
+      
+      try {
+        profile = await loadUserProfile(value.uid);
+        
+        // ?몄쭛 媛?ν븳 ?꾨뱶 珥덇린??
+        if (profile) {
+          editableNickname = profile.nickname || '';
+          editableBio = profile.bio || '';
+        }
+      } catch (error) {
+        console.error('?꾨줈???뺣낫瑜?遺덈윭?ㅻ뒗 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎:', error);
+        errorMessage = '?꾨줈???뺣낫瑜?遺덈윭?ㅻ뒗 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.';
+      } finally {
+        isLoading = false;
+      }
+    });
+    
+    // ?꾨줈???ㅽ넗??援щ룆
+    const profileUnsubscribe = userProfile.subscribe(value => {
+      profile = value;
+      
+      if (profile) {
+        editableNickname = profile.nickname || '';
+        editableBio = profile.bio || '';
+      }
+    });
+    
+    return () => {
+      unsubscribe();
+      profileUnsubscribe();
+    };
+  });
+  
+  // ?꾨줈???낅뜲?댄듃
+  async function handleUpdateProfile() {
+    if (!currentUser) return;
+    
+    isSaving = true;
+    errorMessage = null;
+    successMessage = null;
+    
+    try {
+      // ?됰꽕??蹂寃?泥섎━
+      const nicknameResult = await changeNickname(editableNickname);
+      if (!nicknameResult.success) {
+        errorMessage = nicknameResult.message;
+        isSaving = false;
+        return;
+      }
+      
+      // ?먭린?뚭컻 ???섎㉧吏 ?뺣낫 ?낅뜲?댄듃
+      const success = await updateUserProfile({
+        bio: editableBio
+      });
+      
+      if (success) {
+        successMessage = nicknameResult.message || '?꾨줈?꾩씠 ?낅뜲?댄듃?섏뿀?듬땲??';
+        setTimeout(() => {
+          successMessage = null;
+        }, 3000);
+      } else {
+        errorMessage = '?꾨줈?꾩쓣 ?낅뜲?댄듃?섎뒗 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.';
+      }
+    } catch (error) {
+      console.error('?꾨줈?꾩쓣 ?낅뜲?댄듃?섎뒗 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎:', error);
+      errorMessage = '?꾨줈?꾩쓣 ?낅뜲?댄듃?섎뒗 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎.';
+    } finally {
+      isSaving = false;
+    }
+  }
+  
+  // ?쒕뜡 ?됰꽕???앹꽦
+  async function generateNewRandomNickname() {
+    editableNickname = await generateUniqueRandomNickname();
+  }
+</script>
+<div class="min-h-screen bg-gray-100">
+  <main class="max-w-7xl mx-auto py-6 px-2 sm:px-6 lg:px-8">
+    <div class="bg-white shadow rounded-lg overflow-hidden max-w-2xl mx-auto">
+      <div class="px-6 py-5 border-b border-gray-200">
+        <h1 class="text-2xl font-semibold text-gray-900">???꾨줈??/h1>
+      </div>
+      
+      {#if isLoading}
+        <div class="flex justify-center py-12">
+          <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+        </div>
+      {:else if errorMessage}
+        <div class="p-6 bg-red-50 text-red-800">
+          <p>{errorMessage}</p>
+        </div>
+      {:else if profile}
+        <div class="p-6">
+          {#if successMessage}
+            <div class="mb-6 p-4 bg-green-50 text-green-800 rounded-md">
+              <p>{successMessage}</p>
+            </div>
+          {/if}
+          
+          <form on:submit|preventDefault={handleUpdateProfile}>
+            <!-- ?ъ슜??湲곕낯 ?뺣낫 -->
+            <div class="mb-6 border-b border-gray-200 pb-6">
+              <h2 class="text-lg font-medium text-gray-900 mb-4">湲곕낯 ?뺣낫</h2>
+              
+              <div class="flex items-center mb-4">
+                <div class="h-16 w-16 rounded-full bg-indigo-100 flex items-center justify-center te
+xt-2xl font-bold text-indigo-800 mr-4">
+                  {currentUser?.email?.charAt(0).toUpperCase() || '?'}
+                </div>
+                <div>
+                  <p class="text-sm text-gray-500">?대찓??/p>
+                  <p class="font-medium">{currentUser?.email || ''}</p>
+                </div>
+              </div>
+            </div>
+            
+            <!-- ?됰꽕???뱀뀡 -->
+            <div class="mb-6">
+              <div class="flex justify-between items-center mb-2">
+                <label for="nickname" class="block text-sm font-medium text-gray-700">?됰꽕??/label>
+                <button 
+                  type="button"
+                  class="text-sm text-indigo-600 hover:text-indigo-800"
+                  on:click={generateNewRandomNickname}
+                >
+                  ?쒕뜡 ?됰꽕???앹꽦
+                </button>
+              </div>
+              <div class="flex space-x-2">
+                <input 
+                  id="nickname"
+                  type="text"
+                  bind:value={editableNickname}
+                  class="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:r
+ing-indigo-500" 
+                  placeholder="?됰꽕?꾩쓣 ?낅젰?섏꽭??
+                  required
+                />
+              </div>
+              <p class="mt-1 text-sm text-gray-500">?ㅻⅨ ?ъ슜?먯뿉寃??쒖떆?섎뒗 ?대쫫?낅땲??</p>
+            </div>
+            
+            <!-- ?먭린?뚭컻 ?뱀뀡 -->
+            <div class="mb-6">
+              <label for="bio" class="block text-sm font-medium text-gray-700 mb-2">?먭린?뚭컻</label>
+              <textarea 
+                id="bio"
+                bind:value={editableBio}
+                rows="4"
+                class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:rin
+g-indigo-500"
+                placeholder="?먭린?뚭컻瑜??낅젰?섏꽭??(?좏깮?ы빆)"
+              ></textarea>
+            </div>
+            
+            <!-- ???踰꾪듉 -->
+            <div class="flex justify-end">
+              <button
+                type="submit"
+                class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-med
+ium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-
+2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+                disabled={isSaving}
+              >
+                {#if isSaving}
+                  <div class="mr-2 h-4 w-4 border-2 border-white border-t-transparent rounded-full a
+nimate-spin"></div>
+                  ???以?..
+                {:else}
+                  蹂寃쎌궗?????
+                {/if}
+              </button>
+            </div>
+          </form>
+        </div>
+      {/if}
+    </div>
+  </main>
+</div>
